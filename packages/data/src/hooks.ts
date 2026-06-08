@@ -259,32 +259,43 @@ export function useWebSocket(url: string): UseWebSocketReturn {
     const socketRef = useRef<WebSocket | null>(null)
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const retryCountRef = useRef(0)
+    const generationRef = useRef(0)
 
     useEffect(() => {
-        let isMounted = true;
+        generationRef.current += 1;
+        const myGen = generationRef.current;
+
+        // Reset retry count on URL change
+        retryCountRef.current = 0;
 
         function connect() {
+            if (myGen !== generationRef.current) return;
+
             const socket = new WebSocket(url);
             socketRef.current = socket;
             setState('connecting')
 
             socket.onopen = () => {
-                if (!isMounted) return;
+                if (myGen !== generationRef.current) return;
                 setState('open');
                 retryCountRef.current = 0;
             }
 
             socket.onmessage = (e) => {
-                if (!isMounted) return;
+                if (myGen !== generationRef.current) return;
                 setMessage(e.data)
             }
 
             socket.onclose = () => {
-                if (!isMounted) return;
+                if (myGen !== generationRef.current) return;
                 setState('closed')
 
                 const timeout = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
                 retryCountRef.current += 1;
+
+                if (reconnectTimeoutRef.current) {
+                    clearTimeout(reconnectTimeoutRef.current);
+                }
 
                 reconnectTimeoutRef.current = setTimeout(() => {
                     connect();
@@ -292,21 +303,27 @@ export function useWebSocket(url: string): UseWebSocketReturn {
             }
 
             socket.onerror = () => {
-                if (!isMounted) return;
+                if (myGen !== generationRef.current) return;
                 setState('error')
-
+                // Force closing the socket so that the onclose handler triggers reconnect
+                socket.close();
             }
         }
 
         connect();
 
         return () => {
-            isMounted = false;
+            // Invalidate any active callbacks immediately by incrementing generation
+            generationRef.current += 1;
+
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current)
+                reconnectTimeoutRef.current = null
             }
             if (socketRef.current) {
-                socketRef.current.close();
+                const socketToClose = socketRef.current;
+                socketRef.current = null;
+                socketToClose.close();
             }
         }
     }, [url])
