@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { TaskList, TaskItem } from "./TaskList.js"
-import { Screen } from '@termuijs/core'
+import { Screen, caps } from '@termuijs/core'
 
 describe("TaskList", () => {
     it("renders tasks with standard indicators", () => {
@@ -52,5 +52,35 @@ describe("TaskList", () => {
         widget.tick(100)
         widget.render(screen)
         expect(screen.back[0].map(c => c.char).join('')).toContain('Task 1 ⠙')
+    })
+
+    it("uses ASCII spinner when caps.unicode is false", () => {
+        const originalUnicode = caps.unicode
+        try {
+            caps.unicode = false
+            const widget = new TaskList({}, { wheelspin: true }, [{ id: 1, label: 'Task 1', status: 'running' }])
+            const screen = new Screen(40, 5)
+            widget.updateRect({ x: 0, y: 0, width: 40, height: 5 })
+            
+            widget.render(screen)
+            expect(screen.back[0].map(c => c.char).join('')).toContain('Task 1 -')
+
+            widget.tick(100)
+            widget.render(screen)
+            expect(screen.back[0].map(c => c.char).join('')).toContain('Task 1 \\')
+        } finally {
+            caps.unicode = originalUnicode
+        }
+    })
+
+    it("correctly propagates dirty state when tasks are updated", () => {
+        const widget = new TaskList({}, {}, [{ id: 1, label: 'Task 1', status: 'pending' }])
+        const screen = new Screen(40, 5)
+        widget.updateRect({ x: 0, y: 0, width: 40, height: 5 })
+        widget.render(screen) // renders and clears dirty flag
+
+        expect(widget.isDirty).toBe(false)
+        widget.setTasks([{ id: 1, label: 'Task 1', status: 'done' }])
+        expect(widget.isDirty).toBe(true)
     })
 })

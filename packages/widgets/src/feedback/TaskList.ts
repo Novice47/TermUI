@@ -1,3 +1,4 @@
+import { type Style, caps } from '@termuijs/core';
 import { Widget } from '../base/Widget.js';
 
 export type TaskStatus = 'pending' | 'running' | 'done' | 'error';
@@ -16,7 +17,8 @@ export interface TaskListOptions {
   wheelspin?: boolean;
 }
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPINNER_FRAMES_UNICODE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPINNER_FRAMES_ASCII = ['-', '\\', '|', '/'];
 const SPINNER_INTERVAL = 80;
 
 export class TaskList extends Widget {
@@ -31,7 +33,7 @@ export class TaskList extends Widget {
   private elapsed = 0;
 
   constructor(
-    style?: any,
+    style?: Partial<Style>,
     options: TaskListOptions = {},
     tasks: TaskItem[] = []
   ) {
@@ -46,7 +48,7 @@ export class TaskList extends Widget {
 
   public setTasks(tasks: TaskItem[]): void {
     this.tasks = tasks;
-    this._dirty = true;
+    this.markDirty();
   }
 
   public tick(dt: number): void {
@@ -56,10 +58,11 @@ export class TaskList extends Widget {
     if (!hasRunningTasks) return;
 
     this.elapsed += dt;
+    const frames = caps.unicode ? SPINNER_FRAMES_UNICODE : SPINNER_FRAMES_ASCII;
     if (this.elapsed >= SPINNER_INTERVAL) {
-      this.frameIndex = (this.frameIndex + 1) % SPINNER_FRAMES.length;
+      this.frameIndex = (this.frameIndex + 1) % frames.length;
       this.elapsed = 0;
-      this._dirty = true;
+      this.markDirty();
     }
   }
 
@@ -76,7 +79,12 @@ export class TaskList extends Widget {
           indicator = this.pendingText;
           break;
         case 'running':
-          indicator = this.wheelspin ? SPINNER_FRAMES[this.frameIndex] : this.runningText;
+          if (this.wheelspin) {
+            const frames = caps.unicode ? SPINNER_FRAMES_UNICODE : SPINNER_FRAMES_ASCII;
+            indicator = frames[this.frameIndex % frames.length];
+          } else {
+            indicator = this.runningText;
+          }
           break;
         case 'done':
           indicator = this.doneText;
